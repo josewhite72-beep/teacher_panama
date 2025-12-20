@@ -10,7 +10,9 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
-
+  <!-- jsPDF + AutoTable (para PDF en cliente) -->
+https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js</script>
+https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js</script>
   <!-- PWA manifest + icons (rutas absolutas para GitHub Pages subcarpeta) -->
   <link rel="manifest" href="/teacher_panama/manifest.json">
   <meta name="theme-color" content="#4f46e5">
@@ -181,6 +183,43 @@ function App() {
                 <Icon name="import" />
                 <input type="file" ref={fileInputRef} className="hidden" accept=".txt,.csv" onChange={importList} />
               </button>
+      {/* ======= BOTONES CSV/PDF ======= */}
+{view !== 'groups' && (
+  <>
+    {/* Exportar CALIFICACIONES del grupo activo a CSV */}
+    <button
+      aria-label="Exportar calificaciones CSV"
+      onClick={() => exportGradesCSV(selectedGroupId)}
+      className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center btn-active"
+      title="Exportar calificaciones (CSV)"
+    >
+      {/* Usa cualquier icono; si añadiste Icon 'csv', colócalo aquí */}
+      <span className="font-extrabold text-xs text-white">CSV</span>
+    </button>
+
+    {/* Exportar ASISTENCIA del grupo activo a CSV */}
+    <button
+      aria-label="Exportar asistencia CSV"
+      onClick={() => exportAttendanceCSV(selectedGroupId)}
+      className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center btn-active"
+      title="Exportar asistencia (CSV)"
+    >
+      <span className="font-extrabold text-xs text-white">CSV</span>
+    </button>
+
+    {/* Generar PDF con portada + calificaciones + asistencia */}
+    <button
+      aria-label="Generar PDF del grupo"
+      onClick={() => generateGroupPDF(selectedGroupId)}
+      className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center btn-active"
+      title="Generar reporte PDF"
+    >
+      {/* Si añadiste Icon 'pdf', colócalo aquí */}
+      <span className="font-extrabold text-xs text-white">PDF</span>
+    </button>
+
+  </>
+)}
             )}
             <button aria-label="Respaldo" onClick={handleBackup} className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center btn-active">
               <Icon name="save" />
