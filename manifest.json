@@ -5,55 +5,19 @@
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "display_override": ["window-controls-overlay", "standalone"],
   "background_color": "#F8FAFC",
   "theme_color": "#4f46e5",
   "orientation": "portrait",
-  "categories": ["education", "productivity"],
   "icons": [
     {
       "src": "icons/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/png"
     },
     {
       "src": "icons/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "icons/screenshot-1.png",
-      "sizes": "1080x1920",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "Pantalla principal de grupos"
-    },
-    {
-      "src": "icons/screenshot-2.png",
-      "sizes": "1080x1920",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "Vista de calificaciones"
-    }
-  ],
-  "shortcuts": [
-    {
-      "name": "Nuevo Grupo",
-      "short_name": "Grupo",
-      "description": "Crear un nuevo grupo de estudiantes",
-      "url": "./index.html?action=new-group",
-      "icons": [{ "src": "icons/shortcut-group.png", "sizes": "96x96" }]
-    },
-    {
-      "name": "Exportar Reporte",
-      "short_name": "Exportar",
-      "description": "Exportar reporte actual",
-      "url": "./index.html?action=export",
-      "icons": [{ "src": "icons/shortcut-export.png", "sizes": "96x96" }]
+      "type": "image/png"
     }
   ]
 }
