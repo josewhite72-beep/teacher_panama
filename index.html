@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TeacherPanama Pro</title>
+
+    <!-- PWA Metadata -->
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#4f46e5">
+    <link rel="icon" sizes="192x192" href="./icons/icon-192.png">
+    <link rel="icon" sizes="512x512" href="./icons/icon-512.png">
+
+    <!-- Librerías de confianza (CDN) -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Librerías para exportación -->
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script src="https://unpkg.com/jspdf-autotable@3.5.28/dist/jspdf.plugin.autotable.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior-y: contain;
+            background-color: #F8FAFC;
+        }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+
+        @keyframes slide-up {
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .animate-slide-up { animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+
+        .shadow-ios {
+            box-shadow: 0 15px 35px -5px rgba(79, 70, 229, 0.12),
+                        0 10px 15px -10px rgba(79, 70, 229, 0.1);
+        }
+
+        input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+        .btn-active:active { transform: scale(0.92); transition: 0.1s; }
+        html, body { touch-action: manipulation; }
+
+        /* Estilos para el menú desplegable */
+        .export-menu {
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(-10px);
+            transition: all 0.2s ease;
+        }
+        .export-menu.show {
+            opacity: 1;
+            pointer-events: all;
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const CATEGORIES = [
+        { id: 'diaria',   name: 'Notas Diarias', color: 'bg-blue-100 text-blue-700' },
+        { id: 'ejercicio',name: 'Ejercicios',    color: 'bg-indigo-100 text-indigo-700' },
+        { id: 'actividad',name: 'Actividades',   color: 'bg-emerald-100 text-emerald-700' },
+        { id: 'examen',   name: 'Examen',        color: 'bg-rose-100 text-rose-700' }
+    ];
+
+    const ATT_STATUS = {
+        P: { color: 'bg-emerald-500 text-white', label: 'Presente' },
+        A: { color: 'bg-rose-500 text-white',    label: 'Ausente'  },
+        T: { color: 'bg-amber-500 text-white',   label: 'Tardanza' }
+    };
+
+    const Icon = ({ name }) => {
+        const icons = {
+            plus:  (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5"  y1="12" x2="19" y2="12"/></svg>),
+            back:  (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>),
+            trash: (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>),
+            save:  (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg>),
+            import:(<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>),
+            close: (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>),
+            export:(<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>),
+        };
+        return icons[name] || null;
+    };
+
+    function App() {
+        const [data, setData] = useState(() => {
+            const saved = localStorage.getItem('TP_MASTER_DB');
+            return saved ? JSON.parse(saved) : {
+                groups: [],
+                students: [],
+                activities: [],
+                grades: {},
+                attendance: {}
+            };
+        });
+
+        const [view, setView] = useState('groups');
+        const [tab, setTab]  = useState('grades');
+        const [selectedGroupId, setSelectedGroupId] = useState(null);
+        const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+        const [modal, setModal] = useState({ type: null });
+        const [inputValue, setInputValue] = useState('');
+        const [selectedCat, setSelectedCat] = useState('diaria');
+        const [showExportMenu, setShowExportMenu] = useState(false);
+        const fileInputRef = useRef(null);
+        const exportMenuRef = useRef(null);
+
+        useEffect(() => {
+            try {
+                localStorage.setItem('TP_MASTER_DB', JSON.stringify(data));
+                console.log("Datos guardados automáticamente.");
+            } catch (err) {
+                console.error("Error guardando datos", err);
+            }
+        }, [data]);
+
+        // Cerrar menú de exportación al hacer clic fuera
+        useEffect(() => {
+            const handleClickOutside = (event) => {
+                if (exportMenuRef.current && !exportMenuRef.current.contains(event.target)) {
+                    setShowExportMenu(false);
+                }
+            };
+            document.addEventListener('mousedown', handleClickOutside);
+            return () => document.removeEventListener('mousedown', handleClickOutside);
+        }, []);
+
+        // ==================== FUNCIONES DE EXPORTACIÓN ====================
+        const exportToPDF = () => {
+            setShowExportMenu(false);
+            if (!selectedGroupId) return alert("Selecciona un grupo primero.");
+
+            const group = data.groups.find(g => g.id === selectedGroupId);
+            const students = data.students.filter(s => s.groupId === selectedGroupId);
+            const activities = data.activities.filter(a => a.groupId === selectedGroupId);
+
+            if (students.length === 0) {
+                alert("No hay estudiantes en este grupo.");
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            // Título
+            doc.setFontSize(18);
+            doc.text(`Reporte: ${group?.name || 'Grupo'}`, 14, 15);
+            doc.setFontSize(10);
+            doc.text(`Fecha: ${new Date().toLocaleDateString()} - Estudiantes: ${students.length}`, 14, 22);
+
+            // Tabla de calificaciones
+            if (activities.length > 0) {
+                const headers = ["Estudiante", ...activities.map(a => a.name.substring(0, 15)), "Promedio"];
+                const rows = students.map(s => {
+                    const row = [s.name.substring(0, 20)];
+                    let sum = 0, count = 0;
+                    activities.forEach(a => {
+                        const val = data.grades[`${s.id}_${a.id}`];
+                        row.push(val !== undefined ? val : "-");
+                        if (typeof val === 'number') { sum += val; count++; }
+                    });
+                    row.push(count ? (sum / count).toFixed(1) : "-");
+                    return row;
+                });
+
+                doc.autoTable({
+                    head: [headers],
+                    body: rows,
+                    startY: 30,
+                    theme: 'grid',
+                    styles: { fontSize: 8, cellPadding: 2 },
+                    headStyles: { fillColor: [79, 70, 229], textColor: 255 },
+                    margin: { left: 10, right: 10 }
+                });
+            } else {
+                doc.text("No hay actividades registradas", 14, 30);
+            }
+
+            // Asistencia
+            const attendanceDates = Object.keys(data.attendance)
+                .map(k => k.split('_')[1])
+                .filter((v, i, a) => a.indexOf(v) === i)
+                .sort()
+                .slice(-5); // últimas 5 fechas
+
+            if (attendanceDates.length > 0) {
+                doc.addPage();
+                doc.setFontSize(16);
+                doc.text("Asistencia (Últimas 5 fechas)", 14, 15);
+
+                const attHeaders = ["Estudiante", ...attendanceDates.map(d => new Date(d).toLocaleDateString())];
+                const attRows = students.map(s => {
+                    const row = [s.name.substring(0, 20)];
+                    attendanceDates.forEach(d => {
+                        const status = data.attendance[`${s.id}_${d}`];
+                        row.push(status || "-");
+                    });
+                    return row;
+                });
+
+                doc.autoTable({
+                    head: [attHeaders],
+                    body: attRows,
+                    startY: 25,
+                    theme: 'grid',
+                    styles: { fontSize: 8, cellPadding: 2 },
+                    headStyles: { fillColor: [16, 185, 129], textColor: 255 }
+                });
+            }
+
+            doc.save(`Reporte_${group?.name.replace(/[^a-z0-9]/gi, '_') || 'Grupo'}_${new Date().toISOString().slice(0,10)}.pdf`);
+        };
+
+        const exportToExcel = () => {
+            setShowExportMenu(false);
+            if (!selectedGroupId) return alert("Selecciona un grupo primero.");
+
+            const group = data.groups.find(g => g.id === selectedGroupId);
+            const students = data.students.filter(s => s.groupId === selectedGroupId);
+            const activities = data.activities.filter(a => a.groupId === selectedGroupId);
+
+            if (students.length === 0) {
+                alert("No hay estudiantes en este grupo.");
+                return;
+            }
+
+            const wb = XLSX.utils.book_new();
+            wb.Props = { 
+                Title: `Reporte ${group?.name}`, 
+                Subject: "Calificaciones y Asistencia", 
+                Author: "TeacherPanama Pro",
+                CreatedDate: new Date()
+            };
+
+            // Hoja de calificaciones
+            if (activities.length > 0) {
+                const gradeHeaders = ["Estudiante", ...activities.map(a => a.name), "Promedio"];
+                const gradeRows = students.map(s => {
+                    const row = [s.name];
+                    let sum = 0, count = 0;
+                    activities.forEach(a => {
+                        const val = data.grades[`${s.id}_${a.id}`];
+                        row.push(val !== undefined ? val : "");
+                        if (typeof val === 'number') { sum += val; count++; }
+                    });
+                    row.push(count ? (sum / count).toFixed(1) : "-");
+                    return row;
+                });
+
+                const gradeSheet = XLSX.utils.aoa_to_sheet([gradeHeaders, ...gradeRows]);
+                
+                // Ajustar ancho de columnas
+                const colWidths = gradeHeaders.map((_, index) => ({
+                    wch: index === 0 ? 25 : 15
+                }));
+                gradeSheet['!cols'] = colWidths;
+
+                XLSX.utils.book_append_sheet(wb, gradeSheet, "Calificaciones");
+            }
+
+            // Hoja de asistencia
+            const attendanceDates = Object.keys(data.attendance)
+                .map(k => k.split('_')[1])
+                .filter((v, i, a) => a.indexOf(v) === i)
+                .sort();
+
+            if (attendanceDates.length > 0) {
+                const attHeaders = ["Estudiante", ...attendanceDates.map(d => new Date(d).toLocaleDateString())];
+                const attRows = students.map(s => {
+                    const row = [s.name];
+                    attendanceDates.forEach(d => {
+                        const status = data.attendance[`${s.id}_${d}`];
+                        row.push(status || "");
+                    });
+                    return row;
+                });
+
+                const attSheet = XLSX.utils.aoa_to_sheet([attHeaders, ...attRows]);
+                
+                // Ajustar ancho de columnas
+                const colWidths = attHeaders.map((_, index) => ({
+                    wch: index === 0 ? 25 : 12
+                }));
+                attSheet['!cols'] = colWidths;
+
+                XLSX.utils.book_append_sheet(wb, attSheet, "Asistencia");
+            }
+
+            // Hoja de resumen
+            const summaryHeaders = ["Estadística", "Valor"];
+            const summaryRows = [
+                ["Grupo", group?.name || ""],
+                ["Total Estudiantes", students.length],
+                ["Total Actividades", activities.length],
+                ["Fechas de Asistencia", attendanceDates.length],
+                ["Fecha de Reporte", new Date().toLocaleDateString()]
+            ];
+
+            const summarySheet = XLSX.utils.aoa_to_sheet([summaryHeaders, ...summaryRows]);
+            XLSX.utils.book_append_sheet(wb, summarySheet, "Resumen");
+
+            XLSX.writeFile(wb, `Reporte_${group?.name.replace(/[^a-z0-9]/gi, '_') || 'Grupo'}_${new Date().toISOString().slice(0,10)}.xlsx`);
+        };
+
+        const exportToWord = () => {
+            setShowExportMenu(false);
+            if (!selectedGroupId) return alert("Selecciona un grupo primero.");
+
+            const group = data.groups.find(g => g.id === selectedGroupId);
+            const students = data.students.filter(s => s.groupId === selectedGroupId);
+            const activities = data.activities.filter(a => a.groupId === selectedGroupId);
+
+            if (students.length === 0) {
+                alert("No hay estudiantes en este grupo.");
+                return;
+            }
+
+            let html = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <title>Reporte ${group?.name}</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; margin: 40px; }
+                        h1 { color: #4f46e5; }
+                        h2 { color: #374151; margin-top: 30px; }
+                        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+                        th, td { border: 1px solid #d1d5db; padding: 8px 12px; text-align: left; }
+                        th { background-color: #4f46e5; color: white; }
+                        tr:nth-child(even) { background-color: #f9fafb; }
+                        .summary { background-color: #f0f9ff; padding: 20px; border-radius: 10px; margin-top: 30px; }
+                        .footer { margin-top: 40px; color: #6b7280; font-size: 12px; }
+                    </style>
+                </head>
+                <body>
+                <h1>📊 Reporte: ${group?.name || 'Grupo'}</h1>
+                <p><strong>Fecha:</strong> ${new Date().toLocaleDateString()}</p>
+                <p><strong>Total Estudiantes:</strong> ${students.length}</p>
+            `;
+
+            // Calificaciones
+            if (activities.length > 0) {
+                html += `<h2>📝 Calificaciones</h2><table><tr><th>Estudiante</th>`;
+                activities.forEach(a => {
+                    html += `<th>${a.name}</th>`;
+                });
+                html += `<th>Promedio</th></tr>`;
+
+                students.forEach(s => {
+                    let sum = 0, count = 0;
+                    html += `<tr><td>${s.name}</td>`;
+                    activities.forEach(a => {
+                        const val = data.grades[`${s.id}_${a.id}`];
+                        if (typeof val === 'number') { sum += val; count++; }
+                        html += `<td>${val !== undefined ? val : '-'}</td>`;
+                    });
+                    const avg = count ? (sum / count).toFixed(1) : '-';
+                    html += `<td><strong>${avg}</strong></td></tr>`;
+                });
+                html += `</table>`;
+            } else {
+                html += `<p>No hay actividades registradas.</p>`;
+            }
+
+            // Asistencia (últimas 5 fechas)
+            const attendanceDates = Object.keys(data.attendance)
+                .map(k => k.split('_')[1])
+                .filter((v, i, a) => a.indexOf(v) === i)
+                .sort()
+                .slice(-5);
+
+            if (attendanceDates.length > 0) {
+                html += `<h2>✅ Asistencia (Últimas 5 fechas)</h2><table><tr><th>Estudiante</th>`;
+                attendanceDates.forEach(d => {
+                    html += `<th>${new Date(d).toLocaleDateString()}</th>`;
+                });
+                html += `</tr>`;
+
+                students.forEach(s => {
+                    html += `<tr><td>${s.name}</td>`;
+                    attendanceDates.forEach(d => {
+                        const status = data.attendance[`${s.id}_${d}`];
+                        const statusText = status === 'P' ? '✅' : status === 'A' ? '❌' : status === 'T' ? '⚠️' : '-';
+                        html += `<td>${statusText}</td>`;
+                    });
+                    html += `</tr>`;
+                });
+                html += `</table>`;
+            }
+
+            // Resumen
+            html += `
+                <div class="summary">
+                    <h2>📈 Resumen</h2>
+                    <p><strong>Grupo:</strong> ${group?.name || 'No especificado'}</p>
+                    <p><strong>Total Estudiantes:</strong> ${students.length}</p>
+                    <p><strong>Total Actividades:</strong> ${activities.length}</p>
+                    <p><strong>Registros de Asistencia:</strong> ${attendanceDates.length} fechas</p>
+                    <p><strong>Generado el:</strong> ${new Date().toLocaleString()}</p>
+                </div>
+                
+                <div class="footer">
+                    <hr>
+                    <p>Reporte generado automáticamente por TeacherPanama Pro</p>
+                    <p>App docente offline - Todos los datos almacenados localmente</p>
+                </div>
+            `;
+
+            html += `</body></html>`;
+
+            const blob = new Blob([html], { type: 'application/msword' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Reporte_${group?.name.replace(/[^a-z0-9]/gi, '_') || 'Grupo'}_${new Date().toISOString().slice(0,10)}.doc`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        };
+
+        const handleBackup = () => {
+            try {
+                const backupData = {
+                    ...data,
+                    _exportDate: new Date().toISOString(),
+                    _version: '1.0'
+                };
+                const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `Respaldo_TeacherPanama_${new Date().toISOString().slice(0,10)}.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            } catch (err) {
+                alert("Error al exportar el archivo.");
+            }
+        };
+
+        const importList = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const lines = ev.target.result.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+                if (!lines.length) { alert("El archivo está vacío."); return; }
+                if (!selectedGroupId) { alert("Primero selecciona un grupo."); return; }
+                const now = Date.now();
+                const newStudents = lines.map((name, idx) => ({
+                    id: 's' + now + '_' + idx + '_' + Math.random().toString(36).slice(2, 7),
+                    name,
+                    groupId: selectedGroupId
+                }));
+                setData(prev => ({ ...prev, students: [...prev.students, ...newStudents] }));
+                e.target.value = null;
+            };
+            reader.readAsText(file);
+        };
+
+        const addGroup = () => {
+            const name = (inputValue || '').trim();
+            if (!name) return;
+            const id = 'g' + Date.now();
+            setData(prev => ({ ...prev, groups: [...prev.groups, { id, name }] }));
+            setModal({ type: null });
+            setInputValue('');
+        };
+
+        const addStudent = () => {
+            const name = (inputValue || '').trim();
+            if (!name || !selectedGroupId) return;
+            const id = 's' + Date.now();
+            setData(prev => ({
+                ...prev,
+                students: [...prev.students, { id, name, groupId: selectedGroupId }]
+            }));
+            setModal({ type: null });
+            setInputValue('');
+        };
+
+        const addActivity = () => {
+            const name = (inputValue || '').trim();
+            if (!name || !selectedGroupId) return;
+            const id = 'a' + Date.now();
+            setData(prev => ({
+                ...prev,
+                activities: [...prev.activities, { id, name, groupId: selectedGroupId, category: selectedCat }]
+            }));
+            setModal({ type: null });
+            setInputValue('');
+            setSelectedCat('diaria');
+        };
+
+        const updateGrade = (sId, aId, val) => {
+            const raw = (val ?? '').toString().trim();
+            setData(prev => ({
+                ...prev,
+                grades: { ...prev.grades, [`${sId}_${aId}`]: raw === '' ? undefined : Number(raw) }
+            }));
+        };
+
+        const setAtt = (sId, status) => {
+            const key = `${sId}_${selectedDate}`;
+            setData(prev => ({
+                ...prev,
+                attendance: { ...prev.attendance, [key]: prev.attendance[key] === status ? undefined : status }
+            }));
+        };
+
+        const getAvg = (sId) => {
+            const groupActs = data.activities.filter(a => a.groupId === selectedGroupId);
+            let sum = 0, count = 0;
+            for (const a of groupActs) {
+                const v = data.grades[`${sId}_${a.id}`];
+                if (typeof v === 'number' && !Number.isNaN(v)) { sum += v; count++; }
+            }
+            if (!count) return "—";
+            return (sum / count).toFixed(1);
+        };
+
+        const activeGroup = data.groups.find(g => g.id === selectedGroupId);
+        const groupStudents = data.students.filter(s => s.groupId === selectedGroupId);
+        const groupActivities = data.activities.filter(a => a.groupId === selectedGroupId);
+
+        const closeModal = () => { setModal({ type: null }); setInputValue(''); };
+        const confirmDelete = (msg, cb) => { if (confirm(msg)) cb(); };
+
+        return (
+            <div className="flex flex-col h-screen max-w-md mx-auto bg-slate-50 relative overflow-hidden">
+                <header className="bg-indigo-700 text-white px-7 pt-12 pb-10 rounded-b-[50px] shadow-2xl z-30">
+                    <div className="flex justify-between items-center mb-10">
+                        <div className="flex items-center gap-4">
+                            {view !== 'groups' && (
+                                <button aria-label="Volver" onClick={() => setView('groups')} className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center btn-active">
+                                    <Icon name="back" />
+                                </button>
+                            )}
+                            <div>
+                                <h1 className="text-2xl font-black uppercase tracking-tighter leading-none">
+                                    {view === 'groups' ? 'TEACHER PANAMA' : (activeGroup?.name || 'Grupo')}
+                                </h1>
+                                <p className="text-[10px] font-bold text-indigo-200 mt-1 uppercase tracking-widest">
+                                    {view === 'groups' ? 'Sincronizado Local' : `${groupStudents.length} Estudiantes`}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex gap-2">
+                            {view !== 'groups' && (
+                                <>
+                                    <div className="relative" ref={exportMenuRef}>
+                                        <button 
+                                            aria-label="Exportar" 
+                                            onClick={() => setShowExportMenu(!showExportMenu)}
+                                            className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center btn-active"
+                                        >
+                                            <Icon name="export" />
+                                        </button>
+                                        <div className={`absolute right-0 top-full mt-2 w-48 bg-white rounded-2xl shadow-2xl py-2 z-50 border border-slate-100 export-menu ${showExportMenu ? 'show' : ''}`}>
+                                            <button onClick={exportToPDF} className="w-full px-4 py-3 text-left text-sm font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-3">
+                                                <span className="text-rose-500">📄</span> Exportar a PDF
+                                            </button>
+                                            <button onClick={exportToExcel} className="w-full px-4 py-3 text-left text-sm font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-3">
+                                                <span className="text-emerald-500">📊</span> Exportar a Excel
+                                            </button>
+                                            <button onClick={exportToWord} className="w-full px-4 py-3 text-left text-sm font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-3">
+                                                <span className="text-blue-500">📝</span> Exportar a Word
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <button aria-label="Importar lista" onClick={() => fileInputRef.current?.click()} className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center btn-active">
+                                        <Icon name="import" />
+                                        <input type="file" ref={fileInputRef} className="hidden" accept=".txt,.csv" onChange={importList} />
+                                    </button>
+                                </>
+                            )}
+                            <button aria-label="Respaldo" onClick={handleBackup} className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center btn-active">
+                                <Icon name="save" />
+                            </button>
+                        </div>
+                    </div>
+
+                    {view !== 'groups' && (
+                        <div className="flex bg-indigo-900/30 p-1.5 rounded-[22px]">
+                            <button onClick={() => setTab('grades')} className={`flex-1 py-4 rounded-xl text-[10px] font-black uppercase transition-all ${tab === 'grades' ? 'bg-white text-indigo-700 shadow-xl' : 'text-indigo-200'}`}>Calificaciones</button>
+                            <button onClick={() => setTab('attendance')} className={`flex-1 py-4 rounded-xl text-[10px] font-black uppercase transition-all ${tab === 'attendance' ? 'bg-white text-indigo-700 shadow-xl' : 'text-indigo-200'}`}>Asistencia</button>
+                        </div>
+                    )}
+                </header>
+
+                <main className="flex-1 overflow-y-auto px-6 py-6 pb-32 no-scrollbar">
+                    {view === 'groups' ? (
+                        <div className="space-y-4">
+                            {data.groups.map(g => (
+                                <div key={g.id} onClick={() => { setSelectedGroupId(g.id); setView('detail'); }} className="bg-white p-7 rounded-[40px] shadow-ios flex items-center justify-between btn-active">
+                                    <div className="flex items-center gap-5">
+                                        <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-[28px] flex items-center justify-center font-black text-2xl uppercase">{g.name?.[0] || 'G'}</div>
+                                        <div>
+                                            <p className="font-extrabold text-slate-800 text-lg leading-none mb-1">{g.name}</p>
+                                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{data.students.filter(s => s.groupId === g.id).length} Estudiantes</p>
+                                        </div>
+                                    </div>
+                                    <button aria-label="Eliminar grupo" onClick={(e) => { e.stopPropagation(); confirmDelete("¿Eliminar grupo y sus datos?", () => {
+                                        setData(prev => ({
+                                            ...prev,
+                                            groups: prev.groups.filter(i => i.id !== g.id),
+                                            students: prev.students.filter(s => s.groupId !== g.id),
+                                            activities: prev.activities.filter(a => a.groupId !== g.id),
+                                            grades: Object.fromEntries(Object.entries(prev.grades).filter(([key]) => !key.includes('_'))),
+                                            attendance: Object.fromEntries(Object.entries(prev.attendance).filter(([key]) => !key.includes('_')))
+                                        }));
+                                    }); }} className="p-2 text-slate-200 hover:text-rose-500">
+                                        <Icon name="trash" />
+                                    </button>
+                                </div>
+                            ))}
+                            {data.groups.length === 0 && (
+                                <div className="text-center text-slate-400 text-sm mt-6">Crea tu primer grupo con el botón (+) abajo.</div>
+                            )}
+                        </div>
+                    ) : tab === 'grades' ? (
+                        <div className="space-y-4">
+                            {groupStudents.map(s => (
+                                <div key={s.id} className="bg-white p-7 rounded-[45px] shadow-sm border border-slate-100">
+                                    <div className="flex justify-between items-center mb-6">
+                                        <div>
+                                            <h4 className="font-extrabold text-slate-800 text-sm uppercase tracking-tight">{s.name}</h4>
+                                            <button onClick={() => { confirmDelete("¿Borrar alumno?", () => {
+                                                setData(prev => ({
+                                                    ...prev,
+                                                    students: prev.students.filter(i => i.id !== s.id),
+                                                    grades: Object.fromEntries(Object.entries(prev.grades).filter(([key]) => !key.startsWith(s.id + '_'))),
+                                                    attendance: Object.fromEntries(Object.entries(prev.attendance).filter(([key]) => !key.startsWith(s.id + '_')))
+                                                }));
+                                            }); }} className="text-[9px] font-bold text-slate-300 uppercase mt-1">Eliminar</button>
+                                        </div>
+                                        <div className={`px-5 py-2.5 rounded-2xl text-[11px] font-black shadow-inner ${((parseFloat(getAvg(s.id)) || 0) < 3 && getAvg(s.id) !== "—") ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-700'}`}>PROM: {getAvg(s.id)}</div>
+                                    </div>
+                                    <div className="flex gap-4 overflow-x-auto no-scrollbar py-2">
+                                        {groupActivities.map(a => (
+                                            <div key={a.id} className="min-w-[115px] bg-slate-50 p-6 rounded-[35px] border border-slate-100 relative">
+                                                <span className={`absolute top-2.5 left-3 text-[7px] font-black px-2 py-0.5 rounded-full uppercase ${CATEGORIES.find(c => c.id === a.category)?.color}`}>{a.category}</span>
+                                                <p className="text-[9px] font-black text-slate-400 uppercase text-center mt-6 mb-3 truncate">{a.name}</p>
+                                                <input type="number" step="0.1" min="1" max="5" inputMode="decimal" className="w-full bg-transparent text-center font-black text-indigo-700 text-2xl outline-none" value={data.grades[`${s.id}_${a.id}`] ?? ''} onChange={(e) => updateGrade(s.id, a.id, e.target.value)} placeholder="—" aria-label={`Nota de ${s.name} en ${a.name}`} />
+                                            </div>
+                                        ))}
+                                        <button onClick={() => setModal({ type: 'activity' })} className="min-w-[85px] h-[125px] bg-indigo-50/50 rounded-[35px] border-2 border-dashed border-indigo-100 flex items-center justify-center text-indigo-300 btn-active"><Icon name="plus" /></button>
+                                    </div>
+                                </div>
+                            ))}
+                            {groupStudents.length === 0 && (<div className="text-center text-slate-400 text-sm mt-6">Este grupo no tiene estudiantes todavía. Usa el botón (+) para agregarlos o importa una lista.</div>)}
+                        </div>
+                    ) : (
+                        <div className="bg-white rounded-[45px] border border-slate-100 shadow-sm overflow-hidden divide-y divide-slate-50">
+                            <div className="p-7 bg-slate-50/50 flex justify-between items-center">
+                                <span className="text-[10px] font-black uppercase text-slate-400">Fecha</span>
+                                <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="font-bold text-xs text-indigo-600 outline-none bg-transparent" />
+                            </div>
+                            {groupStudents.map(s => (
+                                <div key={s.id} className="p-7 flex items-center justify-between">
+                                    <p className="font-extrabold text-slate-700 text-xs uppercase truncate max-w-[150px]">{s.name}</p>
+                                    <div className="flex gap-3">
+                                        {Object.entries(ATT_STATUS).map(([key, info]) => {
+                                            const active = data.attendance[`${s.id}_${selectedDate}`] === key;
+                                            return (
+                                                <button key={key} onClick={() => setAtt(s.id, key)} className={`w-12 h-12 rounded-[22px] flex items-center justify-center font-black text-sm transition-all ${active ? info.color + ' shadow-lg scale-110' : 'bg-slate-100 text-slate-300'}`} aria-pressed={active} aria-label={`${info.label} para ${s.name}`}>{key}</button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ))}
+                            {groupStudents.length === 0 && (<div className="p-7 text-center text-slate-400 text-sm">Agrega estudiantes para registrar asistencia.</div>)}
+                        </div>
+                    )}
+                </main>
+
+                <button onClick={() => { setInputValue(''); setModal({ type: view === 'groups' ? 'group' : 'student' }); }} className="fixed bottom-10 right-10 w-16 h-16 bg-indigo-600 text-white rounded-[28px] shadow-2xl flex items-center justify-center btn-active z-40" aria-label="Agregar"><Icon name="plus" /></button>
+
+                {modal.type && (
+                    <div className="fixed inset-0 bg-black/30 backdrop-blur-[1px] z-50 flex items-end sm:items-center sm:justify-center">
+                        <div className="w-full sm:max-w-sm bg-white rounded-t-[30px] sm:rounded-[30px] p-7 animate-slide-up shadow-ios">
+                            <div className="flex items-center justify-between mb-6">
+                                <h3 className="text-lg font-extrabold text-slate-800 uppercase tracking-tight">
+                                    {modal.type === 'group'   && 'Nuevo Grupo'}
+                                    {modal.type === 'student' && 'Nuevo Estudiante'}
+                                    {modal.type === 'activity'&& 'Nueva Actividad'}
+                                </h3>
+                                <button onClick={() => { setModal({ type: null }); }} aria-label="Cerrar" className="w-10 h-10 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-500 btn-active"><Icon name="close" /></button>
+                            </div>
+
+                            {(modal.type === 'group' || modal.type === 'student' || modal.type === 'activity') && (
+                                <div className="space-y-2 mb-4">
+                                    <label className="text-[10px] font-black uppercase text-slate-400">Nombre</label>
+                                    <input type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)} className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 outline-none font-bold text-slate-700" placeholder={modal.type === 'group' ? 'Ej. 3°A Inglés' : modal.type === 'student' ? 'Ej. María Gómez' : 'Ej. Examen 1'} autoFocus />
+                                </div>
+                            )}
+
+                            {modal.type === 'activity' && (
+                                <div className="space-y-2 mb-6">
+                                    <label className="text-[10px] font-black uppercase text-slate-400">Categoría</label>
+                                    <div className="flex gap-2 flex-wrap">
+                                        {CATEGORIES.map(cat => {
+                                            const active = selectedCat === cat.id;
+                                            return (
+                                                <button key={cat.id} onClick={() => setSelectedCat(cat.id)} className={`px-3 py-2 rounded-xl text-[11px] font-black border ${active ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>{cat.name}</button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="flex gap-3">
+                                <button onClick={() => { setModal({ type: null }); }} className="flex-1 py-3 rounded-2xl bg-slate-100 text-slate-600 font-extrabold uppercase text-xs btn-active">Cancelar</button>
+                                {modal.type === 'group' && (
+                                    <button onClick={addGroup} className="flex-1 py-3 rounded-2xl bg-indigo-600 text-white font-extrabold uppercase text-xs btn-active">Crear Grupo</button>
+                                )}
+                                {modal.type === 'student' && (
+                                    <button onClick={addStudent} className="flex-1 py-3 rounded-2xl bg-indigo-600 text-white font-extrabold uppercase text-xs btn-active" disabled={!selectedGroupId}>Agregar Estudiante</button>
+                                )}
+                                {modal.type === 'activity' && (
+                                    <button onClick={addActivity} className="flex-1 py-3 rounded-2xl bg-indigo-600 text-white font-extrabold uppercase text-xs btn-active" disabled={!selectedGroupId}>Crear Actividad</button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    // Registrar Service Worker
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./service-worker.js')
+                .then(reg => console.log('Service Worker registrado:', reg.scope))
+                .catch(err => console.error('Error registrando Service Worker:', err));
+        });
+    }
+
+    const root = document.getElementById('root');
+    ReactDOM.createRoot(root).render(<App />);
+</script>
+</body>
+</html>
